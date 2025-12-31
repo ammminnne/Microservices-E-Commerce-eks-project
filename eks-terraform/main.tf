@@ -2,20 +2,25 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# 1. On récupère le VPC par défaut (votre environnement Lab)
+# 1. On récupère le VPC par défaut
 data "aws_vpc" "default" {
   default = true
 }
 
-# 2. On récupère les sous-réseaux du Lab
+# 2. On récupère les sous-réseaux VALIDES (On force les zones a, b, c, d uniquement)
 data "aws_subnets" "default" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
+  filter {
+    name   = "availability-zone"
+    # IMPORTANT : On liste explicitement les zones qui marchent (on évite us-east-1e)
+    values = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d"]
+  }
 }
 
-# 3. CRUCIAL : On récupère le "LabRole" existant au lieu d'en créer un
+# 3. On récupère le "LabRole" existant
 data "aws_iam_role" "lab_role" {
   name = "LabRole"
 }
@@ -23,7 +28,6 @@ data "aws_iam_role" "lab_role" {
 # 4. Création du Cluster EKS
 resource "aws_eks_cluster" "eks" {
   name     = "project-eks"
-  # On utilise le LabRole ici
   role_arn = data.aws_iam_role.lab_role.arn
 
   vpc_config {
@@ -35,7 +39,6 @@ resource "aws_eks_cluster" "eks" {
 resource "aws_eks_node_group" "node_grp" {
   cluster_name    = aws_eks_cluster.eks.name
   node_group_name = "project-node-group"
-  # On utilise encore le LabRole ici
   node_role_arn   = data.aws_iam_role.lab_role.arn
   subnet_ids      = data.aws_subnets.default.ids
 
@@ -45,6 +48,5 @@ resource "aws_eks_node_group" "node_grp" {
     min_size     = 1
   }
 
-  # t3.medium est plus stable pour les Labs que t2.large
   instance_types = ["t3.medium"]
 }
